@@ -29,6 +29,7 @@ impl LeakyBucket {
         let mut initial_state = State { last: None, ..State::default() };
 
         let atomic_ptr = AtomicPtr::new(&mut initial_state);
+
         LeakyBucket {
             state: atomic_ptr,
             per_request: Duration::new(1 / rate, 0),
@@ -65,9 +66,11 @@ impl crate::Limiter for LeakyBucket {
                 continue;
             }
 
-            // Can this be negative?
-            new_state.sleep_for += self.per_request
-                - Instant::now().duration_since(prev_state_last.unwrap());
+            let since =
+                Instant::now().duration_since(prev_state_last.unwrap());
+            if self.per_request > since {
+                new_state.sleep_for += self.per_request - since;
+            }
 
             if new_state.sleep_for < self.max_slack {
                 new_state.sleep_for = self.max_slack;
@@ -89,4 +92,18 @@ impl crate::Limiter for LeakyBucket {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use crate::leaky::LeakyBucket;
+    use crate::Limiter;
+    use std::time::{Duration, Instant};
+    #[test]
+    fn test_unlimited() {
+        let l = LeakyBucket::new(10);
+        let now = Instant::now();
+        for i in 0..10 {
+            l.take();
+        }
+
+        assert_eq!(now.elapsed() > Duration::new(10, 0), true);
+    }
+}
