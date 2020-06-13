@@ -59,7 +59,7 @@ impl crate::Limiter for LeakyBucket {
                 let ret_val = self.state.compare_and_swap(
                     prev_state,
                     &mut new_state,
-                    Ordering::Relaxed,
+                    Ordering::Release,
                 );
                 taken = ret_val == prev_state;
                 continue;
@@ -75,8 +75,18 @@ impl crate::Limiter for LeakyBucket {
 
             new_state.last =
                 Some(new_state.last.unwrap().add(new_state.sleep_for));
+
+            let ret_val = self.state.compare_and_swap(
+                prev_state,
+                &mut new_state,
+                Ordering::Release,
+            );
+            taken = ret_val == prev_state;
         }
         thread::sleep(new_state.sleep_for);
         new_state.last
     }
 }
+
+#[cfg(test)]
+mod tests {}
