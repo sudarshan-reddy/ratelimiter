@@ -33,7 +33,7 @@ impl LeakyBucket {
         LeakyBucket {
             state: atomic_ptr,
             per_request: Duration::new(1 / rate, 0),
-            max_slack: Duration::new(10 / rate, 0),
+            max_slack: Duration::new(1 / rate, 0),
         }
     }
 }
@@ -98,10 +98,13 @@ mod tests {
     use std::time::{Duration, Instant};
     #[test]
     fn test_unlimited() {
-        let l = LeakyBucket::new(10);
+        let l = LeakyBucket::new(1);
         let now = Instant::now();
+        let mut prev = Instant::now();
         for i in 0..10 {
-            l.take();
+            let t = l.take();
+            println!("{}", t.unwrap().duration_since(prev).as_millis());
+            prev = t.unwrap();
         }
 
         assert_eq!(now.elapsed() > Duration::new(10, 0), true);
