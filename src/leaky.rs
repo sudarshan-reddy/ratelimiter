@@ -3,7 +3,6 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-#[allow(dead_code)]
 struct State {
     last: Option<Instant>,
     sleep_for: Duration,
@@ -15,7 +14,6 @@ impl Default for State {
     }
 }
 
-#[allow(dead_code)]
 pub struct LeakyBucket {
     state: AtomicPtr<State>,
 
@@ -23,7 +21,6 @@ pub struct LeakyBucket {
     max_slack: Duration,
 }
 
-#[allow(dead_code)]
 impl LeakyBucket {
     pub fn new(rate: u64) -> Self {
         let mut initial_state = State { last: None, ..State::default() };
@@ -38,7 +35,6 @@ impl LeakyBucket {
     }
 }
 
-#[allow(dead_code)]
 impl crate::Limiter for LeakyBucket {
     fn take(&self) -> Option<Instant> {
         let mut new_state = State::default();
