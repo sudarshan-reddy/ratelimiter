@@ -18,6 +18,8 @@ pub struct LeakyBucket {
     state: AtomicPtr<State>,
 
     per_request: Duration,
+
+    #[allow(dead_code)]
     max_slack: Duration,
 }
 
@@ -30,7 +32,7 @@ impl LeakyBucket {
         LeakyBucket {
             state: atomic_ptr,
             per_request: Duration::new(1 / rate, 0),
-            max_slack: Duration::new(1 / rate, 0),
+            max_slack: Duration::new(0, 0),
         }
     }
 }
@@ -44,43 +46,42 @@ impl crate::Limiter for LeakyBucket {
             let prev_state = self.state.load(Ordering::Acquire);
             new_state = State::default();
 
-            let prev_state_last: Option<Instant>;
+            let prev_state_last_opt: Option<Instant>;
 
             unsafe {
-                prev_state_last = (*prev_state).last;
+                prev_state_last_opt = (*prev_state).last;
             }
 
-            // TODO: see if this can be converted to a combinator
-            // or a match
-            if prev_state_last == None {
-                let ret_val = self.state.compare_and_swap(
-                    prev_state,
-                    &mut new_state,
-                    Ordering::Release,
-                );
-                taken = ret_val == prev_state;
-                continue;
-            }
+            taken = match prev_state_last_opt {
+                Some(prev_state_last) => {
+                    let since = Instant::now().duration_since(prev_state_last);
+                    if self.per_request > since {
+                        new_state.sleep_for += self.per_request - since;
+                    }
+                    if new_state.sleep_for < self.max_slack {
+                        new_state.sleep_for = self.max_slack;
+                    }
 
-            let since =
-                Instant::now().duration_since(prev_state_last.unwrap());
-            if self.per_request > since {
-                new_state.sleep_for += self.per_request - since;
-            }
+                    new_state.last =
+                        Some(new_state.last.unwrap().add(new_state.sleep_for));
 
-            if new_state.sleep_for < self.max_slack {
-                new_state.sleep_for = self.max_slack;
-            }
+                    let ret_val = self.state.compare_and_swap(
+                        prev_state,
+                        &mut new_state,
+                        Ordering::Release,
+                    );
+                    ret_val == prev_state
+                }
 
-            new_state.last =
-                Some(new_state.last.unwrap().add(new_state.sleep_for));
-
-            let ret_val = self.state.compare_and_swap(
-                prev_state,
-                &mut new_state,
-                Ordering::Release,
-            );
-            taken = ret_val == prev_state;
+                None => {
+                    let ret_val = self.state.compare_and_swap(
+                        prev_state,
+                        &mut new_state,
+                        Ordering::Release,
+                    );
+                    ret_val == prev_state
+                }
+            };
         }
         thread::sleep(new_state.sleep_for);
         new_state.last
@@ -99,10 +100,10 @@ mod tests {
         let mut prev = Instant::now();
         for i in 0..10 {
             let t = l.take();
-            println!("{}", t.unwrap().duration_since(prev).as_millis());
+            println!("{}, {}", i, t.unwrap().duration_since(prev).as_millis());
             prev = t.unwrap();
         }
 
-        assert_eq!(now.elapsed() > Duration::new(10, 0), true);
+        assert_eq!(now.elapsed() > Duration::new(9, 0), true);
     }
 }
