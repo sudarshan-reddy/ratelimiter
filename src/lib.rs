@@ -3,7 +3,7 @@ use std::time::Instant;
 mod leaky;
 
 pub trait Limiter {
-    fn take() -> Option<Instant>;
+    fn take(&self) -> Option<Instant>;
 }
 
 #[cfg(test)]
