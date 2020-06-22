@@ -92,6 +92,8 @@ impl crate::Limiter for LeakyBucket {
 mod tests {
     use crate::leaky::LeakyBucket;
     use crate::Limiter;
+    use std::sync::{Arc, Mutex};
+    use std::thread;
     use std::time::{Duration, Instant};
     #[test]
     fn test_unlimited() {
@@ -100,10 +102,40 @@ mod tests {
         let mut prev = Instant::now();
         for i in 0..10 {
             let t = l.take();
-            println!("{}, {}", i, t.unwrap().duration_since(prev).as_millis());
+            println!("{:?}, {:?}", t, prev);
+            let elapsed_in_millis =
+                t.unwrap().duration_since(prev).as_millis();
+            println!("{}, {}", i, elapsed_in_millis);
             prev = t.unwrap();
+            // 1010 milliseconds because the time based leaky bucket could
+            // be 10% higher or lower.
+            assert_eq!(elapsed_in_millis < 1010, true);
         }
 
         assert_eq!(now.elapsed() > Duration::new(9, 0), true);
     }
+
+    //#[test]
+    //fn test_rate_limiting() {
+    //    let l = LeakyBucket::new(1);
+
+    //    let safe_l = Arc::new(Mutex::new(l));
+
+    //    let handles = (0..4)
+    //        .into_iter()
+    //        .map(|_| {
+    //            let data = Arc::clone(&safe_l);
+    //            thread::spawn(move || {
+    //                let l = data.lock().unwrap();
+    //                let now = Instant::now();
+    //                let t = l.take();
+    //                println!("{}", t.unwrap().duration_since(now).as_millis());
+    //            })
+    //        })
+    //        .collect::<Vec<thread::JoinHandle<_>>>();
+
+    //    for thread in handles {
+    //        thread.join().unwrap();
+    //    }
+    //}
 }
